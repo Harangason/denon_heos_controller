@@ -1,0 +1,27 @@
+{
+  "denon_ip": "192.168.178.31",
+  "heos_port": 1255,
+  "avr_port": 23,
+  "socket_timeout_seconds": 3.0,
+  "web_host": "0.0.0.0",
+  "web_port": 5050,
+  "audio_bridge": {
+    "mode": "manual",
+    "vlc_path": "",
+    "default_stream_url": "",
+    "vlc_rc_host": "127.0.0.1",
+    "vlc_rc_port": 4212,
+    "vlc_volume": 160,
+    "airplay_tool_path": "",
+    "dlna_tool_path": "",
+    "rtp_port": 5004
+  },
+  "ui": {
+    "active_tab": "daily",
+    "selected_player_id": "1018948048",
+    "default_heos_input": "inputs/tvaudio",
+    "favorite_preset": 1,
+    "live_enabled": true,
+    "live_interval_seconds": 3
+  }
+}

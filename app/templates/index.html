@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Denon HEOS Controller</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=20260830-7">
+</head>
+<body data-active-tab="{{ settings.ui.active_tab }}" data-live-enabled="{{ 'true' if settings.ui.live_enabled else 'false' }}" data-live-interval="{{ settings.ui.live_interval_seconds }}">
+<main class="app-shell">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Lokale Steuerung</p>
+      <h1>Denon HEOS Controller</h1>
+      <p class="muted">Living Room · <strong id="currentIp">{{ settings.denon_ip or 'nicht gesetzt' }}</strong> · Port <strong>{{ settings.web_port }}</strong></p>
+    </div>
+    <div class="hero-actions">
+      <span id="connectionBadge" class="badge">Bereit</span>
+      <span id="liveBadge" class="badge live-badge">Live bereit</span>
+      <button id="liveToggleButton" onclick="toggleLiveMode()" class="secondary">Live an</button>
+      <button onclick="refreshStatus()" class="secondary">Status prüfen</button>
+    </div>
+  </section>
+
+  <nav class="tab-bar" aria-label="Bereich">
+    <button id="dailyTabButton" class="tab-button" onclick="switchTab('daily')">Alltag</button>
+    <button id="settingsTabButton" class="tab-button" onclick="switchTab('settings')">Einstellungen</button>
+  </nav>
+
+  <section id="dailyView" class="view-panel">
+    <section class="live-strip">
+      <div>
+        <span class="live-dot" id="liveDot"></span>
+        <strong>Live-Ansicht</strong>
+        <span id="liveText">Automatische Aktualisierung wird vorbereitet.</span>
+      </div>
+      <label>Intervall
+        <select id="liveInterval" onchange="setLiveInterval()">
+          <option value="3" {% if settings.ui.live_interval_seconds == 3 %}selected{% endif %}>3 s</option>
+          <option value="5" {% if settings.ui.live_interval_seconds == 5 %}selected{% endif %}>5 s</option>
+          <option value="10" {% if settings.ui.live_interval_seconds == 10 %}selected{% endif %}>10 s</option>
+          <option value="15" {% if settings.ui.live_interval_seconds == 15 %}selected{% endif %}>15 s</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="summary-grid" id="deviceSummary">
+      <div class="summary-item">
+        <span>HEOS</span>
+        <strong>nicht geprüft</strong>
+      </div>
+      <div class="summary-item">
+        <span>AVR</span>
+        <strong>nicht geprüft</strong>
+      </div>
+      <div class="summary-item">
+        <span>Player</span>
+        <strong>noch keine Daten</strong>
+      </div>
+    </section>
+
+    <section class="grid controls-grid">
+      <div class="card wide-card now-card">
+        <h2>Jetzt läuft</h2>
+        <div class="now-layout">
+          <img id="nowImage" class="now-image" alt="" hidden>
+          <div class="now-copy">
+            <strong id="nowTitle">Noch nicht geprüft</strong>
+            <span id="nowArtist">Status prüfen, um die aktuelle Wiedergabe zu laden.</span>
+            <span id="nowAlbum" class="muted"></span>
+            <span id="nowMeta" class="now-meta">Live-Daten werden geladen.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Schnellsteuerung</h2>
+        <div class="button-grid icon-grid three">
+          <button class="icon-button" onclick="powerOnMainRoom()" aria-label="Hauptraum einschalten" title="Hauptraum einschalten"><span class="button-icon">⏻</span><span>Power</span></button>
+          <button class="icon-button" onclick="heosTransport('play')" aria-label="Wiedergabe starten" title="Wiedergabe starten"><span class="button-icon">▶</span><span>Play</span></button>
+          <button class="icon-button" onclick="heosTransport('pause')" aria-label="Wiedergabe pausieren" title="Wiedergabe pausieren"><span class="button-icon">⏸</span><span>Pause</span></button>
+          <button class="icon-button" onclick="heosTransport('previous')" aria-label="Vorheriger Titel" title="Vorheriger Titel"><span class="button-icon">⏮</span><span>Zurück</span></button>
+          <button class="icon-button" onclick="heosTransport('stop')" aria-label="Wiedergabe stoppen" title="Wiedergabe stoppen"><span class="button-icon">⏹</span><span>Stop</span></button>
+          <button class="icon-button" onclick="heosTransport('next')" aria-label="Nächster Titel" title="Nächster Titel"><span class="button-icon">⏭</span><span>Weiter</span></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>HEOS Lautstärke</h2>
+        <div class="volume-row">
+          <input id="heosVolume" type="range" min="0" max="100" value="40" oninput="heosVolumeValue.innerText=this.value">
+          <span id="heosVolumeValue">40</span>
+          <button class="icon-button square-button" onclick="setHeosVolume()" aria-label="HEOS Lautstärke setzen" title="HEOS Lautstärke setzen"><span class="button-icon">✓</span></button>
+        </div>
+        <div class="button-grid icon-grid two compact-buttons">
+          <button class="icon-button" onclick="post('/api/avr/volume_down', null, 'AVR leiser')" aria-label="AVR leiser" title="AVR leiser"><span class="button-icon">−</span><span>AVR</span></button>
+          <button class="icon-button" onclick="post('/api/avr/volume_up', null, 'AVR lauter')" aria-label="AVR lauter" title="AVR lauter"><span class="button-icon">＋</span><span>AVR</span></button>
+          <button class="icon-button" onclick="post('/api/avr/mute_on', null, 'Stumm geschaltet')" aria-label="AVR stummschalten" title="AVR stummschalten"><span class="button-icon">🔇</span><span>Mute</span></button>
+          <button class="icon-button" onclick="post('/api/avr/mute_off', null, 'Stumm aus')" aria-label="Stummschaltung aufheben" title="Stummschaltung aufheben"><span class="button-icon">🔊</span><span>Ton</span></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Quellen & Dienste</h2>
+        <div class="source-row">
+          <select id="heosInput">
+            <option value="inputs/tvaudio" {% if settings.ui.default_heos_input == 'inputs/tvaudio' %}selected{% endif %}>TV Audio</option>
+            <option value="inputs/hdmi_arc_1" {% if settings.ui.default_heos_input == 'inputs/hdmi_arc_1' %}selected{% endif %}>HDMI ARC</option>
+            <option value="inputs/aux_in_1" {% if settings.ui.default_heos_input == 'inputs/aux_in_1' %}selected{% endif %}>AUX 1</option>
+            <option value="inputs/line_in_1" {% if settings.ui.default_heos_input == 'inputs/line_in_1' %}selected{% endif %}>Line In 1</option>
+            <option value="inputs/optical_in_1" {% if settings.ui.default_heos_input == 'inputs/optical_in_1' %}selected{% endif %}>Optical 1</option>
+            <option value="inputs/coax_in_1" {% if settings.ui.default_heos_input == 'inputs/coax_in_1' %}selected{% endif %}>Coax 1</option>
+            <option value="inputs/bluray" {% if settings.ui.default_heos_input == 'inputs/bluray' %}selected{% endif %}>Blu-ray</option>
+            <option value="inputs/game" {% if settings.ui.default_heos_input == 'inputs/game' %}selected{% endif %}>Game</option>
+            <option value="inputs/mediaplayer" {% if settings.ui.default_heos_input == 'inputs/mediaplayer' %}selected{% endif %}>Media Player</option>
+            <option value="inputs/tuner" {% if settings.ui.default_heos_input == 'inputs/tuner' %}selected{% endif %}>Tuner</option>
+          </select>
+          <button onclick="playHeosInput()">HEOS Eingang</button>
+        </div>
+        <div class="button-grid two compact-buttons">
+          <button onclick="loadHeosSources()">Dienste laden</button>
+          <button onclick="loadHeosPlaylists()">Playlists laden</button>
+        </div>
+        <div class="heos-browser">
+          <div class="browser-toolbar">
+            <button class="secondary small" onclick="browseBack()">Zurück</button>
+            <select id="queueMode" aria-label="Queue-Modus">
+              <option value="1">Jetzt</option>
+              <option value="2">Als nächstes</option>
+              <option value="3">Ans Ende</option>
+              <option value="4">Ersetzen</option>
+            </select>
+          </div>
+          <div id="browserPath" class="browser-path">Quellen noch nicht geladen</div>
+          <div class="source-row compact-source-row">
+            <input id="sourceSearch" placeholder="In aktueller Quelle suchen">
+            <button class="secondary" onclick="searchCurrentSource()">Suchen</button>
+          </div>
+          <div id="sourceBrowser" class="browser-list">
+            <span class="muted">Dienste laden, um Quellen zu durchsuchen.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Favoriten</h2>
+        <div class="preset-row">
+          <input id="favoritePreset" type="number" min="1" max="100" value="{{ settings.ui.favorite_preset }}">
+          <button onclick="playPreset()">Favorit starten</button>
+        </div>
+        <div class="button-grid three compact-buttons">
+          <button onclick="quickPreset(1)">1</button>
+          <button onclick="quickPreset(2)">2</button>
+          <button onclick="quickPreset(3)">3</button>
+          <button onclick="quickPreset(4)">4</button>
+          <button onclick="quickPreset(5)">5</button>
+          <button onclick="quickPreset(6)">6</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Audioformat</h2>
+        <div id="audioFormatPanel" class="info-list">
+          <div><span>Signal</span><strong>nicht geprüft</strong></div>
+          <div><span>Soundmodus</span><strong>nicht geprüft</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Lautsprecher</h2>
+        <div id="speakerPanel" class="speaker-list">
+          <span class="muted">Status prüfen, um die Kanäle zu laden.</span>
+        </div>
+      </div>
+
+      <div class="card bridge-card wide-card">
+        <h2>PC Audio Bridge</h2>
+        <div class="bridge-status">
+          <span id="vlcInstalledBadge" class="badge">VLC prüfen</span>
+          <span id="vlcRunningBadge" class="badge">nicht gestartet</span>
+          <span id="pcInfo" class="muted">PC wird geprüft</span>
+        </div>
+        <div class="url-row">
+          <input id="pcStreamUrl" value="{{ settings.audio_bridge.default_stream_url }}" placeholder="Stream-URL für VLC, z. B. http://.../radio.mp3">
+          <button onclick="openPcStream()">In VLC starten</button>
+        </div>
+        <div class="transport-row">
+          <button onclick="vlcCommand('play')">Play</button>
+          <button onclick="vlcCommand('pause')">Pause</button>
+          <button onclick="vlcCommand('stop')">Stop</button>
+          <button class="danger" onclick="stopVlc()">VLC beenden</button>
+        </div>
+        <div class="volume-row">
+          <input id="vlcVolume" type="range" min="0" max="320" value="{{ settings.audio_bridge.vlc_volume }}" oninput="vlcVolumeValue.innerText=this.value">
+          <span id="vlcVolumeValue">{{ settings.audio_bridge.vlc_volume }}</span>
+          <button onclick="setVlcVolume()">VLC Lautstärke</button>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section id="settingsView" class="view-panel">
+    <section class="grid controls-grid">
+      <div class="card wide-card">
+        <h2>Verbindung</h2>
+        <div class="settings-row">
+          <label>Denon IP
+            <input id="denonIp" value="{{ settings.denon_ip }}" placeholder="192.168.178.45">
+          </label>
+          <label>HEOS Port
+            <input id="heosPort" value="{{ settings.heos_port }}">
+          </label>
+          <label>AVR Port
+            <input id="avrPort" value="{{ settings.avr_port }}">
+          </label>
+          <button onclick="saveSettings()">Speichern</button>
+        </div>
+        <div class="settings-row compact">
+          <label>Timeout Sekunden
+            <input id="socketTimeout" type="number" min="0.5" max="20" step="0.5" value="{{ settings.socket_timeout_seconds }}">
+          </label>
+          <label>HEOS Player
+            <select id="playerSelect" data-selected="{{ settings.ui.selected_player_id }}">
+              <option value="">Automatisch wählen</option>
+            </select>
+          </label>
+          <button class="secondary" onclick="refreshStatus()">Player laden</button>
+        </div>
+        <div class="discover-panel">
+          <button class="secondary" onclick="discoverAvr()">AVR suchen</button>
+          <div id="discoverResults" class="discover-results">
+            <span class="muted">Noch keine Suche gestartet.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>VLC</h2>
+        <div class="bridge-settings">
+          <label>VLC Pfad
+            <input id="vlcPath" value="{{ settings.audio_bridge.vlc_path }}" placeholder="C:\Program Files\VideoLAN\VLC\vlc.exe">
+          </label>
+          <label>Lokaler RC-Port
+            <input id="vlcRcPort" type="number" min="1" max="65535" value="{{ settings.audio_bridge.vlc_rc_port }}">
+          </label>
+          <button onclick="saveBridgeSettings()">VLC speichern</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Bridge Dienste</h2>
+        <div class="bridge-settings">
+          <label>Bridge Modus
+            <select id="bridgeMode">
+              <option value="manual" {% if settings.audio_bridge.mode == 'manual' %}selected{% endif %}>Manuell / VLC</option>
+              <option value="airplay" {% if settings.audio_bridge.mode == 'airplay' %}selected{% endif %}>AirPlay Receiver</option>
+              <option value="dlna" {% if settings.audio_bridge.mode == 'dlna' %}selected{% endif %}>DLNA Receiver</option>
+              <option value="rtp" {% if settings.audio_bridge.mode == 'rtp' %}selected{% endif %}>RTP/UDP Receiver</option>
+            </select>
+          </label>
+          <label>AirPlay Tool Pfad
+            <input id="airplayToolPath" value="{{ settings.audio_bridge.airplay_tool_path }}" placeholder="Optionaler Receiver-Pfad">
+          </label>
+          <label>DLNA Tool Pfad
+            <input id="dlnaToolPath" value="{{ settings.audio_bridge.dlna_tool_path }}" placeholder="Optionaler Receiver-Pfad">
+          </label>
+          <div class="button-grid two">
+            <button onclick="saveBridgeSettings()">Speichern</button>
+            <button class="secondary" onclick="showBridgeHelp()">Hilfe</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <section class="card log-card">
+    <div class="log-title">
+      <h2>Status / Antwort</h2>
+      <button class="secondary small" onclick="clearOutput()">Leeren</button>
+    </div>
+    <div id="output" class="result-panel">
+      <div class="result-message">
+        <strong>App bereit</strong>
+        <span>Alltagssteuerung nutzen oder Einstellungen anpassen.</span>
+      </div>
+    </div>
+  </section>
+</main>
+<script src="/static/js/app.js?v=20260830-7"></script>
+</body>
+</html>
